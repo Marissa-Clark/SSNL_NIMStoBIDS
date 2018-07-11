@@ -25,8 +25,10 @@ import sys
 # In[ ]:
 
 #Get Data Filepath
-if (len(sys.argv) == 2):
-    project_filepath = str(sys.argv[1]).strip(' ')
+args = sys.argv[1:]
+
+if (len(args) == 1):
+    project_filepath = str(args[0]).strip(' ')
 else:
     #"Data needs to be in format: \n       Project Filename            \n        /          \\              \n    NIMS_data  BIDS_info.xlsx      \n       /                           \nSub1 Sub2 Sub3                     \n\n                                   \n
     print("NIMS_to_BIDS.py can take the project's file path as an argument\nNo argument detected\nPlease drag in file path from folder")
@@ -40,44 +42,38 @@ NIMS= project_filepath + '/NIMS_data/'
 
 # In[ ]:
 
-#Read files
+#Get participants and protocol files and assert they exist
+participant_filename = os.path.join(project_filepath, "NIMS_participants.csv")
+assert(os.path.exists(participant_filename)) == 1, "There is no NIMS_participants file in this directory" 
 
-#Figure out what bids info xlsx is named 
-project_file_contents = os.listdir(project_filepath)
-BIDS_filename = [x for x in project_file_contents if "BIDS_info" in x]
-print(BIDS_filename)
-
-#Make sure there's only one bids file
-assert len(BIDS_filename) == 1, 'This folder does not have a BIDS_info file or it has more than one info file' 
-
-xls = pd.ExcelFile(project_filepath + "/" + BIDS_filename[0])
+protocol_filename = os.path.join(project_filepath, "NIMS_protocol.csv")
+assert(os.path.exists(protocol_filename)) == 1, "There is no NIMS_protocol file in this directory" 
 
 #Make folder if folder doesn't exist function
 def makefolder(name):
     if not os.path.exists(name):
         os.makedirs(name)
-        
-#Log Function
 
 
 # In[ ]:
 
 #Load and Clean XLS File
-participants = xls.parse('participants')
+participants = pd.read_csv(participant_filename)
 participants.participant_id = participants.participant_id.astype('str')
 
-protocol = xls.parse('protocol', convert_float=False).iloc[1:,:6] #columns 5 on are reference columns
+protocol = pd.read_csv(protocol_filename) 
 protocol = protocol.dropna(axis=0, thresh=3) #get rid of items that don't have a bids equivalent
-protocol.run_number = protocol.run_number.astype('str').str.strip('.0').str.zfill(2) #Convert run int to string
 
+protocol.run_number = protocol.run_number.astype('str').str.strip('.0').str.zfill(2) #Convert run int to string with leading zeroes
 
 #Create "bold" portion of filename
 protocol['bold_filename'] = ''
-protocol.loc[protocol['ANAT_or_FUNC'] == 'func', 'bold_filename'] = '_bold'
+protocol.loc[protocol['image_type'] == 'func', 'bold_filename'] = '_bold'
 
 #Concatanate filepath and clean
-protocol["BIDS_scan_title_path"] = BIDS + "sub-###/" + protocol.ANAT_or_FUNC + "/sub-###_" + protocol.BIDS_scan_title + "_run-" + protocol.run_number + protocol.bold_filename + ".nii.gz"
-protocol.BIDS_scan_title_path = protocol.BIDS_scan_title_path.str.replace('_run-nan', '') #For items that don't have runs
+protocol['BIDS_scan_title_path'] = BIDS + "sub-###/" + protocol.image_type + "/sub-###_" + protocol.BIDS_scan_title + "_run-" + protocol.run_number + protocol.bold_filename + ".nii.gz"
+protocol['BIDS_scan_title_path'] = protocol.BIDS_scan_title_path.str.replace('_run-nan', '') #For items that don't have runs
+
 
 #Create list for NIMS -> bids conversion
 NIMS_protocol_filenames = protocol.NIMS_scan_title.tolist() #Convert protocol scan titles to list
@@ -95,14 +91,14 @@ def check_against_protocol(participants,protocol):
         #If directory is there, try will work
         try:
             #Get all files in participant directory
-            NIMS_participant_filenames = os.listdir(NIMS + row.nims_title)
+            NIMS_participant_filenames = os.listdir(NIMS + row.nims_id)
            
             #Delete all non-nii.gz files
             NIMS_participant_filenames = [x for x in NIMS_participant_filenames if ".nii.gz"  in x]
 
             for item in set(NIMS_protocol_filenames):
                 
-                directory_filenames = [x for x in NIMS_participant_filenames if item in x]
+                directory_filenames = [x for x in NIMS_participant_filenames if item in x] #Return if in list
                 protocol_filenames = NIMS_BIDS_conversion[NIMS_BIDS_conversion.NIMS_scan_title.str.contains(item)]
                 protocol_filenames = protocol_filenames.iloc[:,1].tolist()
 
@@ -123,8 +119,6 @@ def check_against_protocol(participants,protocol):
             print("sub-" + str(row.participant_id) + " : -- ERROR - folder is missing \n------------")
 
         
-        
-        
     if all_files_correct:
         print("\nAll your folders match your protocol\n")  
     else:
@@ -135,6 +129,9 @@ def check_against_protocol(participants,protocol):
 
 # In[ ]:
 
+
+
+
 def write_text_files(participants, protocol): 
     
     def to_file(filename, content): 
@@ -142,12 +139,12 @@ def write_text_files(participants, protocol):
             text_file.write(content)
     
     #Data Description
-    dataset_description = json.dumps({"BIDSVersion": "1.0.0",                                    "License": "",                                    "Name": "dummy task name",                                   "ReferencesAndLinks": ""})
+    dataset_description = json.dumps({"BIDSVersion": "1.0.0",                                    "License": "",                                    "Name": "",                                   "ReferencesAndLinks": ""})
     to_file(str("dataset_description"), str(dataset_description))
     
 
     #Task Description
-    for item in set(protocol.loc[protocol.ANAT_or_FUNC == "func", 'BIDS_scan_title']):
+    for item in set(protocol.loc[protocol.image_type == "func", 'BIDS_scan_title']):
         full_task_name = protocol.loc[protocol.BIDS_scan_title == item, 'full_task_name']
         full_task_name = full_task_name.reset_index(drop=True)[0] #Gets first instance of RT
         
@@ -158,8 +155,9 @@ def write_text_files(participants, protocol):
         to_file(str(item + "_bold"), str(task_json))
 
     #TSV
-    participant_tsv = participants.loc[:, ['participant_id', 'sex', 'age']]
+    participant_tsv = participants.loc[:, ['participant_id']]
     participant_tsv.loc[:, 'participant_id'] = "sub-" + participant_tsv.loc[:, 'participant_id'].apply(str)
+    
     #Had to write csv and then change it due to python 2/3 incompatability
     participant_tsv.to_csv(BIDS + 'participants.tsv', index=False)
     # Read in the file
@@ -172,9 +170,6 @@ def write_text_files(participants, protocol):
     # Write the file out again
     with open(BIDS + 'participants.tsv', 'w') as file:
         file.write(filedata)
-    
-    
-    
 
 
 # In[ ]:
@@ -192,19 +187,20 @@ def convert_to_bids(participants, protocol):
         participants.participant_id.apply(lambda x: makefolder(BIDS + 'sub-' + str(x) + "/func"))
         
         for index, row in participants.iterrows():
+            
             #Get files
-            NIMS_participant_filenames = os.listdir(NIMS + row.nims_title)
+            NIMS_participant_filenames = os.listdir(NIMS + row.nims_id)
 
             #Delete all non-nii.gz files from list
-            NIMS_participant_filenames = [x for x in NIMS_participant_filenames if ".nii.gz"  in x]
+            NIMS_participant_filenames = [filename for filename in NIMS_participant_filenames if ".nii.gz"in filename]
 
             for item in set(NIMS_protocol_filenames):
-                directory_filenames = [x for x in NIMS_participant_filenames if item in x]
+                directory_filenames = [filename for filename in NIMS_participant_filenames if item in filename] 
                 protocol_filenames = NIMS_BIDS_conversion[NIMS_BIDS_conversion.NIMS_scan_title.str.contains(item)]
                 protocol_filenames = protocol_filenames.iloc[:,1].tolist()
 
                 for index, item in enumerate(directory_filenames):
-                    oldpath = (NIMS + row.nims_title + "/" + directory_filenames[index])
+                    oldpath = (NIMS + row.nims_id + "/" + directory_filenames[index])
                     newpath = (protocol_filenames[index].replace("###", str(row.participant_id)))
                     copyfile(oldpath, newpath)
 
@@ -221,14 +217,4 @@ def convert_to_bids(participants, protocol):
 # In[ ]:
 
 convert_to_bids(participants, protocol)
-
-
-# In[ ]:
-
-
-
-
-# In[ ]:
-
-
 

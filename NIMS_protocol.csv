@@ -1,0 +1,10 @@
+NIMS_scan_title,BIDS_scan_title,full_task_name,run_number,image_type,repetition_time
+_3Plane_Loc_fgre,,,,,
+T1w_9mm_BRAVO,T1w,,,anat,
+ASSET_calibration,,,,,
+BOLD_EPI_29mm_2sec,task-motper,motivated perception,1,func,2
+BOLD_EPI_29mm_2sec,task-motper,motivated perception,2,func,2
+BOLD_EPI_29mm_2sec,task-motper,motivated perception,3,func,2
+BOLD_EPI_29mm_2sec,task-motper,motivated perception,4,func,2
+BOLD_EPI_29mm_2sec,task-localizer,localizer,1,func,2
+BOLD_EPI_29mm_2sec,task-localizer,localizer,2,func,2
