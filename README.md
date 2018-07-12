@@ -55,20 +55,35 @@ NIMS_participants.csv:
   * optional: age
     
 NIMS_protocol.csv:
+
   * **NIMS_scan_title**
+
         - do not include ####\_##\_ proceeding the scan title
+
         - *ex: 3Plane_Loc_fgre, BOLD_EPI_29mm_2sec, T1w_9mm_BRAVO*
+
   * **BIDS_scan_title** 
+
         - follow the bids naming convention on the website
+
         - *ex: T1w, task-{taskname}*
+
   * **full_task_name** 
+
         - taskname will be included in json description file
+
         - *ex: "balloon analog risk task"*
+
   * **image_type**
+
         - "anat" or "func" if anatomical or functional
+
   * **run_number** 
+
         - if functional image with > 1 run
+
   * **repetition_time**
+
         - if functional
  
 ## Running NIMStoBIDS
